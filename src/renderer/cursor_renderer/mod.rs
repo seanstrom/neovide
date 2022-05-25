@@ -11,7 +11,7 @@ use crate::{
     editor::{Cursor, CursorShape},
     redraw_scheduler::REDRAW_SCHEDULER,
     renderer::animation_utils::*,
-    renderer::{GridRenderer, RenderedWindow},
+    renderer::{GridRenderer, RenderedWindow, WindowPadding},
     settings::{ParseFromValue, SETTINGS},
 };
 
@@ -253,6 +253,7 @@ impl CursorRenderer {
         windows: &HashMap<u64, RenderedWindow>,
     ) {
         let (cursor_grid_x, cursor_grid_y) = self.cursor.grid_position;
+        println!("cursor pos: {:?}", self.cursor.grid_position);
 
         if let Some(window) = windows.get(&self.cursor.parent_window_id) {
             let grid_x = cursor_grid_x as f32 + window.grid_current_position.x;
@@ -265,8 +266,10 @@ impl CursorRenderer {
             grid_y = grid_y
                 .max(window.grid_current_position.y)
                 .min(window.grid_current_position.y + window.grid_size.height as f32 - 1.0);
-
-            self.destination = (grid_x * font_width as f32, grid_y * font_height as f32).into();
+            
+            println!("left {:?}", window.padding.left);
+            self.destination = ((grid_x * font_width as f32) + window.padding.left, grid_y * font_height as f32).into();
+            println!("{:?}", self.destination);
         } else {
             self.destination = (
                 (cursor_grid_x * font_width) as f32,

@@ -50,12 +50,23 @@ pub enum WindowDrawCommand {
     },
 }
 
-fn build_window_surface(parent_canvas: &mut Canvas, pixel_size: (i32, i32)) -> Surface {
+#[derive(Copy, Clone, Debug)]
+pub struct WindowPadding {
+    pub top: f32,
+    pub left: f32,
+    pub right: f32,
+    pub bottom: f32,
+}
+
+fn build_window_surface(parent_canvas: &mut Canvas, pixel_size: (i32, i32), padding: WindowPadding) -> Surface {
     let mut context = parent_canvas.recording_context().unwrap();
     let budgeted = Budgeted::Yes;
     let parent_image_info = parent_canvas.image_info();
+    let (width, height) = pixel_size;
+    let padded_width = width + (padding.right + padding.left) as i32;
+    let padded_height = height + (padding.top + padding.bottom) as i32;
     let image_info = ImageInfo::new(
-        pixel_size,
+        (padded_width, padded_height),
         parent_image_info.color_type(),
         parent_image_info.alpha_type(),
         parent_image_info.color_space(),
@@ -79,10 +90,12 @@ fn build_window_surface_with_grid_size(
     parent_canvas: &mut Canvas,
     grid_renderer: &GridRenderer,
     grid_size: Dimensions,
+    padding: WindowPadding,
 ) -> Surface {
     let mut surface = build_window_surface(
         parent_canvas,
         (grid_size * grid_renderer.font_dimensions).into(),
+        padding,
     );
 
     let canvas = surface.canvas();
@@ -105,9 +118,10 @@ impl LocatedSurface {
         parent_canvas: &mut Canvas,
         grid_renderer: &GridRenderer,
         grid_size: Dimensions,
+        padding: WindowPadding,
         top_line: u64,
     ) -> LocatedSurface {
-        let surface = build_window_surface_with_grid_size(parent_canvas, grid_renderer, grid_size);
+        let surface = build_window_surface_with_grid_size(parent_canvas, grid_renderer, grid_size, padding);
 
         LocatedSurface { surface, top_line }
     }
@@ -140,6 +154,8 @@ pub struct RenderedWindow {
     pub current_scroll: f32,
     scroll_destination: f32,
     scroll_t: f32,
+
+    pub padding: WindowPadding,
 }
 
 #[derive(Clone, Debug)]
@@ -156,8 +172,9 @@ impl RenderedWindow {
         id: u64,
         grid_position: Point,
         grid_size: Dimensions,
+        padding: WindowPadding,
     ) -> RenderedWindow {
-        let current_surface = LocatedSurface::new(parent_canvas, grid_renderer, grid_size, 0);
+        let current_surface = LocatedSurface::new(parent_canvas, grid_renderer, grid_size, padding, 0);
 
         RenderedWindow {
             snapshots: VecDeque::new(),
@@ -177,13 +194,15 @@ impl RenderedWindow {
             current_scroll: 0.0,
             scroll_destination: 0.0,
             scroll_t: 2.0, // 2.0 is out of the 0.0 to 1.0 range and stops animation
+
+            padding,
         }
     }
 
     pub fn pixel_region(&self, font_dimensions: Dimensions) -> Rect {
         let current_pixel_position = Point::new(
-            self.grid_current_position.x * font_dimensions.width as f32,
-            self.grid_current_position.y * font_dimensions.height as f32,
+            (self.grid_current_position.x * font_dimensions.width as f32) + self.padding.left,
+            (self.grid_current_position.y * font_dimensions.height as f32) + self.padding.top,
         );
 
         let image_size: (i32, i32) = (self.grid_size * font_dimensions).into();
@@ -366,6 +385,7 @@ impl RenderedWindow {
                         self.current_surface.surface.canvas(),
                         grid_renderer,
                         new_grid_size,
+                        self.padding,
                     );
                     self.current_surface.surface.draw(
                         new_surface.canvas(),
@@ -467,6 +487,7 @@ impl RenderedWindow {
                     self.current_surface.surface.canvas(),
                     grid_renderer,
                     self.grid_size,
+                    self.padding,
                 );
 
                 self.snapshots.clear();

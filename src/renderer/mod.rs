@@ -27,7 +27,7 @@ use crate::{
 use cursor_renderer::CursorRenderer;
 pub use fonts::caching_shaper::CachingShaper;
 pub use grid_renderer::GridRenderer;
-pub use rendered_window::{LineFragment, RenderedWindow, WindowDrawCommand, WindowDrawDetails};
+pub use rendered_window::{LineFragment, RenderedWindow, WindowDrawCommand, WindowDrawDetails, WindowPadding};
 
 #[derive(SettingGroup, Clone)]
 pub struct RendererSettings {
@@ -39,6 +39,10 @@ pub struct RendererSettings {
     floating_blur_amount_y: f32,
     debug_renderer: bool,
     profiler: bool,
+    top_padding: f32,
+    left_padding: f32,
+    right_padding: f32,
+    bottom_padding: f32,
 }
 
 impl Default for RendererSettings {
@@ -52,6 +56,10 @@ impl Default for RendererSettings {
             floating_blur_amount_y: 2.0,
             debug_renderer: false,
             profiler: false,
+            top_padding: 0.0,
+            left_padding: 14.0,
+            right_padding: 14.0,
+            bottom_padding: 0.0,
         }
     }
 }
@@ -216,12 +224,20 @@ impl Renderer {
                             ..
                         } = command
                         {
+                            let settings = SETTINGS.get::<RendererSettings>();
+                            let window_padding = WindowPadding {
+                                top: settings.top_padding,
+                                left: settings.left_padding,
+                                right: settings.right_padding,
+                                bottom: settings.bottom_padding,
+                            };
                             let new_window = RenderedWindow::new(
                                 root_canvas,
                                 &self.grid_renderer,
                                 grid_id,
                                 (grid_left as f32, grid_top as f32).into(),
                                 (width, height).into(),
+                                window_padding,
                             );
                             vacant_entry.insert(new_window);
                         } else {
