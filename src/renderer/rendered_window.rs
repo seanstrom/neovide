@@ -52,10 +52,10 @@ pub enum WindowDrawCommand {
 
 #[derive(Copy, Clone, Debug)]
 pub struct WindowPadding {
-    pub top: f32,
-    pub left: f32,
-    pub right: f32,
-    pub bottom: f32,
+    pub top: u32,
+    pub left: u32,
+    pub right: u32,
+    pub bottom: u32,
 }
 
 fn build_window_surface(parent_canvas: &mut Canvas, pixel_size: (i32, i32), padding: WindowPadding) -> Surface {
@@ -201,8 +201,10 @@ impl RenderedWindow {
 
     pub fn pixel_region(&self, font_dimensions: Dimensions) -> Rect {
         let current_pixel_position = Point::new(
-            (self.grid_current_position.x * font_dimensions.width as f32) + self.padding.left,
-            (self.grid_current_position.y * font_dimensions.height as f32) + self.padding.top,
+            // (self.grid_current_position.x * font_dimensions.width as f32),
+            // (self.grid_current_position.y * font_dimensions.height as f32),
+            (self.grid_current_position.x * font_dimensions.width as f32) + self.padding.left as f32,
+            (self.grid_current_position.y * font_dimensions.height as f32) + self.padding.top as f32,
         );
 
         let image_size: (i32, i32) = (self.grid_size * font_dimensions).into();

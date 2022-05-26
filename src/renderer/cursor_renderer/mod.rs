@@ -3,6 +3,7 @@ mod cursor_vfx;
 
 use std::collections::HashMap;
 
+use glutin::dpi::{PhysicalSize};
 use glutin::event::{Event, WindowEvent};
 use skia_safe::{op, Canvas, Paint, Path, Point};
 
@@ -11,7 +12,7 @@ use crate::{
     editor::{Cursor, CursorShape},
     redraw_scheduler::REDRAW_SCHEDULER,
     renderer::animation_utils::*,
-    renderer::{GridRenderer, RenderedWindow, WindowPadding},
+    renderer::{GridRenderer, RenderedWindow},
     settings::{ParseFromValue, SETTINGS},
 };
 
@@ -249,6 +250,7 @@ impl CursorRenderer {
 
     pub fn update_cursor_destination(
         &mut self,
+        grid_renderer: &mut GridRenderer,
         (font_width, font_height): (u64, u64),
         windows: &HashMap<u64, RenderedWindow>,
     ) {
@@ -267,9 +269,27 @@ impl CursorRenderer {
                 .max(window.grid_current_position.y)
                 .min(window.grid_current_position.y + window.grid_size.height as f32 - 1.0);
             
-            println!("left {:?}", window.padding.left);
-            self.destination = ((grid_x * font_width as f32) + window.padding.left, grid_y * font_height as f32).into();
-            println!("{:?}", self.destination);
+            
+            let pixel_padding = PhysicalSize {
+                width: window.padding.left + window.padding.right,
+                height: window.padding.top + window.padding.bottom,
+            };
+
+            let grid_padding = grid_renderer.convert_physical_to_grid(pixel_padding);
+
+            println!("GRID Padding {:?}", grid_padding);
+
+            let grid_width = window.grid_size.width;
+            let grid_height = window.grid_size.height;
+            // let grid_width_scale = (grid_width - grid_padding.width) as f32 / grid_width as f32;
+            let grid_width_scale = (grid_width * font_width - pixel_padding.width as u64) as f32 / (grid_width * font_width) as f32;
+            // let grid_height_scale = (grid_height - grid_padding.height) as f32 / grid_height as f32;
+            let grid_height_scale = (grid_height * font_height - pixel_padding.height as u64) as f32 / (grid_height * font_height) as f32;
+
+            let destination_x = (grid_x * font_width as f32 * grid_width_scale) + window.padding.left as f32;
+            let destination_y = (grid_y * font_height as f32 * grid_height_scale) + window.padding.top as f32;
+
+            self.destination = (destination_x, destination_y).into();
         } else {
             self.destination = (
                 (cursor_grid_x * font_width) as f32,

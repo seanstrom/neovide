@@ -39,10 +39,10 @@ pub struct RendererSettings {
     floating_blur_amount_y: f32,
     debug_renderer: bool,
     profiler: bool,
-    top_padding: f32,
-    left_padding: f32,
-    right_padding: f32,
-    bottom_padding: f32,
+    top_padding: u32,
+    left_padding: u32,
+    right_padding: u32,
+    bottom_padding: u32,
 }
 
 impl Default for RendererSettings {
@@ -56,10 +56,10 @@ impl Default for RendererSettings {
             floating_blur_amount_y: 2.0,
             debug_renderer: false,
             profiler: false,
-            top_padding: 0.0,
-            left_padding: 14.0,
-            right_padding: 14.0,
-            bottom_padding: 0.0,
+            top_padding: 35,
+            left_padding: 28,
+            right_padding: 28,
+            bottom_padding: 0,
         }
     }
 }
@@ -190,7 +190,7 @@ impl Renderer {
 
         let windows = &self.rendered_windows;
         self.cursor_renderer
-            .update_cursor_destination(font_dimensions.into(), windows);
+            .update_cursor_destination(&mut self.grid_renderer, font_dimensions.into(), windows);
 
         self.cursor_renderer
             .draw(&mut self.grid_renderer, &self.current_mode, root_canvas, dt);
