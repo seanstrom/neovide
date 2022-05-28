@@ -265,8 +265,19 @@ impl CursorRenderer {
             grid_y = grid_y
                 .max(window.grid_current_position.y)
                 .min(window.grid_current_position.y + window.grid_size.height as f32 - 1.0);
+            
+            let padding_width = window.padding.left + window.padding.right;
+            let padding_height = window.padding.top + window.padding.bottom;
+            let total_width = (window.grid_size.width * font_width) as f32;
+            let total_height = (window.grid_size.height * font_height) as f32;
+            let content_width = total_width - padding_width as f32;
+            let content_height = total_height - padding_height as f32;
+            let width_scale_factor = content_width / total_width;
+            let height_scale_factor = content_height / total_height;
 
-            self.destination = (grid_x * font_width as f32, grid_y * font_height as f32).into();
+            let destination_x = (grid_x * font_width as f32 * width_scale_factor) + window.padding.left as f32;
+            let destination_y = (grid_y * font_height as f32 * height_scale_factor) + window.padding.top as f32;
+            self.destination = (destination_x, destination_y).into();
         } else {
             self.destination = (
                 (cursor_grid_x * font_width) as f32,
@@ -282,6 +293,7 @@ impl CursorRenderer {
         current_mode: &EditorMode,
         canvas: &mut Canvas,
         dt: f32,
+        windows: &HashMap<u64, RenderedWindow>,
     ) {
         let render = self.blink_status.update_status(&self.cursor);
         let settings = SETTINGS.get::<CursorSettings>();
@@ -296,120 +308,135 @@ impl CursorRenderer {
 
         let character = self.cursor.grid_cell.0.clone();
 
-        let mut cursor_width = grid_renderer.font_dimensions.width;
-        if self.cursor.double_width && self.cursor.shape == CursorShape::Block {
-            cursor_width *= 2;
-        }
+        if let Some(window) = windows.get(&self.cursor.parent_window_id) {
+            let font_width = grid_renderer.font_dimensions.width;
+            let font_height = grid_renderer.font_dimensions.height;
 
-        let cursor_dimensions: Point = (
-            cursor_width as f32,
-            grid_renderer.font_dimensions.height as f32,
-        )
-            .into();
+            let padding_width = window.padding.left + window.padding.right;
+            let padding_height = window.padding.top + window.padding.bottom;
+            let total_width = (window.grid_size.width * font_width) as f32;
+            let total_height = (window.grid_size.height * font_height) as f32;
 
-        let in_insert_mode = matches!(current_mode, EditorMode::Insert);
+            let width_scale_factor = (total_width - padding_width as f32) / total_width;
+            let height_scale_factor = (total_height - padding_height as f32) / total_height;
 
-        let changed_to_from_cmdline = !matches!(self.previous_editor_mode, EditorMode::CmdLine)
-            ^ matches!(current_mode, EditorMode::CmdLine);
+            let mut cursor_width = font_width as f32 * width_scale_factor;
+            let cursor_height = font_height as f32 * height_scale_factor;
 
-        let center_destination = self.destination + cursor_dimensions * 0.5;
-        let new_cursor = Some(self.cursor.shape.clone());
-
-        if self.previous_cursor_shape != new_cursor {
-            self.previous_cursor_shape = new_cursor.clone();
-            self.set_cursor_shape(
-                &new_cursor.unwrap(),
-                self.cursor
-                    .cell_percentage
-                    .unwrap_or(DEFAULT_CELL_PERCENTAGE),
-            );
-
-            if let Some(vfx) = self.cursor_vfx.as_mut() {
-                vfx.restart(center_destination);
+            if self.cursor.double_width && self.cursor.shape == CursorShape::Block {
+                cursor_width *= 2.0;
             }
-        }
 
-        let mut animating = false;
+            let cursor_dimensions: Point = (
+                cursor_width,
+                cursor_height,
+            )
+                .into();
 
-        if !center_destination.is_zero() {
-            for corner in self.corners.iter_mut() {
-                let immediate_movement = !settings.animate_in_insert_mode && in_insert_mode
-                    || !settings.animate_command_line && !changed_to_from_cmdline;
+            let in_insert_mode = matches!(current_mode, EditorMode::Insert);
 
-                let corner_animating = corner.update(
-                    &settings,
-                    cursor_dimensions,
-                    center_destination,
-                    dt,
-                    immediate_movement,
+            let changed_to_from_cmdline = !matches!(self.previous_editor_mode, EditorMode::CmdLine)
+                ^ matches!(current_mode, EditorMode::CmdLine);
+
+            let center_destination = self.destination + cursor_dimensions * 0.5;
+            let new_cursor = Some(self.cursor.shape.clone());
+
+            if self.previous_cursor_shape != new_cursor {
+                self.previous_cursor_shape = new_cursor.clone();
+                self.set_cursor_shape(
+                    &new_cursor.unwrap(),
+                    self.cursor
+                        .cell_percentage
+                        .unwrap_or(DEFAULT_CELL_PERCENTAGE),
                 );
 
-                animating |= corner_animating;
+                if let Some(vfx) = self.cursor_vfx.as_mut() {
+                    vfx.restart(center_destination);
+                }
             }
 
-            let vfx_animating = if let Some(vfx) = self.cursor_vfx.as_mut() {
-                vfx.update(&settings, center_destination, cursor_dimensions, dt)
+            let mut animating = false;
+
+            if !center_destination.is_zero() {
+                for corner in self.corners.iter_mut() {
+                    let immediate_movement = !settings.animate_in_insert_mode && in_insert_mode
+                        || !settings.animate_command_line && !changed_to_from_cmdline;
+
+                    let corner_animating = corner.update(
+                        &settings,
+                        cursor_dimensions,
+                        center_destination,
+                        dt,
+                        immediate_movement,
+                    );
+
+                    animating |= corner_animating;
+                }
+
+                let vfx_animating = if let Some(vfx) = self.cursor_vfx.as_mut() {
+                    vfx.update(&settings, center_destination, cursor_dimensions, dt)
+                } else {
+                    false
+                };
+
+                animating |= vfx_animating;
+            }
+
+            if animating {
+                REDRAW_SCHEDULER.queue_next_frame();
             } else {
-                false
+                self.previous_editor_mode = current_mode.clone();
+            }
+            if !(self.cursor.enabled && render) {
+                return;
+            }
+            // Draw Background
+            let background_color = self
+                .cursor
+                .background(&grid_renderer.default_style.colors)
+                .to_color()
+                .with_a(self.cursor.alpha());
+            paint.set_color(background_color);
+
+            let path = if self.window_has_focus || self.cursor.shape != CursorShape::Block {
+                self.draw_rectangle(canvas, &paint)
+            } else {
+                let outline_width = settings.unfocused_outline_width * grid_renderer.em_size;
+                self.draw_rectangular_outline(canvas, &paint, outline_width)
             };
 
-            animating |= vfx_animating;
-        }
+            // Draw foreground
+            let foreground_color = self
+                .cursor
+                .foreground(&grid_renderer.default_style.colors)
+                .to_color()
+                .with_a(self.cursor.alpha());
+            paint.set_color(foreground_color);
 
-        if animating {
-            REDRAW_SCHEDULER.queue_next_frame();
-        } else {
-            self.previous_editor_mode = current_mode.clone();
-        }
-        if !(self.cursor.enabled && render) {
-            return;
-        }
-        // Draw Background
-        let background_color = self
-            .cursor
-            .background(&grid_renderer.default_style.colors)
-            .to_color()
-            .with_a(self.cursor.alpha());
-        paint.set_color(background_color);
+            canvas.save();
+            canvas.clip_path(&path, None, Some(false));
 
-        let path = if self.window_has_focus || self.cursor.shape != CursorShape::Block {
-            self.draw_rectangle(canvas, &paint)
-        } else {
-            let outline_width = settings.unfocused_outline_width * grid_renderer.em_size;
-            self.draw_rectangular_outline(canvas, &paint, outline_width)
-        };
+            let y_adjustment = grid_renderer.shaper.y_adjustment();
+            let style = &self.cursor.grid_cell.1;
 
-        // Draw foreground
-        let foreground_color = self
-            .cursor
-            .foreground(&grid_renderer.default_style.colors)
-            .to_color()
-            .with_a(self.cursor.alpha());
-        paint.set_color(foreground_color);
+            let bold = style.as_ref().map(|x| x.bold).unwrap_or(false);
+            let italic = style.as_ref().map(|x| x.italic).unwrap_or(false);
 
-        canvas.save();
-        canvas.clip_path(&path, None, Some(false));
+            let blobs = &grid_renderer.shaper.shape_cached(character, bold, italic);
 
-        let y_adjustment = grid_renderer.shaper.y_adjustment();
-        let style = &self.cursor.grid_cell.1;
+            for blob in blobs.iter() {
+                canvas.draw_text_blob(
+                    &blob,
+                    (self.destination.x, self.destination.y + y_adjustment as f32),
+                    &paint,
+                );
+            }
 
-        let bold = style.as_ref().map(|x| x.bold).unwrap_or(false);
-        let italic = style.as_ref().map(|x| x.italic).unwrap_or(false);
+            canvas.restore();
 
-        let blobs = &grid_renderer.shaper.shape_cached(character, bold, italic);
-
-        for blob in blobs.iter() {
-            canvas.draw_text_blob(
-                &blob,
-                (self.destination.x, self.destination.y + y_adjustment as f32),
-                &paint,
-            );
-        }
-
-        canvas.restore();
-
-        if let Some(vfx) = self.cursor_vfx.as_ref() {
-            vfx.render(&settings, canvas, grid_renderer, &self.cursor);
+            if let Some(vfx) = self.cursor_vfx.as_ref() {
+                vfx.render(&settings, canvas, grid_renderer, &self.cursor);
+            }
         }
     }
 

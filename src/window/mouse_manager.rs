@@ -18,7 +18,7 @@ use skia_safe::Rect;
 use crate::{
     bridge::{SerialCommand, UiCommand},
     event_aggregator::EVENT_AGGREGATOR,
-    renderer::{Renderer, WindowDrawDetails},
+    renderer::{Renderer, WindowDrawDetails, WindowPadding},
     settings::SETTINGS,
     window::keyboard_manager::KeyboardManager,
     window::WindowSettings,
@@ -110,13 +110,18 @@ impl MouseManager {
         keyboard_manager: &KeyboardManager,
         renderer: &Renderer,
         windowed_context: &WindowedContext<PossiblyCurrent>,
+        window_padding: WindowPadding,
     ) {
         let size = windowed_context.window().inner_size();
         if x < 0 || x as u32 >= size.width || y < 0 || y as u32 >= size.height {
             return;
         }
 
-        let position: PhysicalPosition<f32> = PhysicalPosition::new(x as f32, y as f32);
+        let padding_width = window_padding.left + window_padding.right;
+        let padding_height = window_padding.top + window_padding.bottom;
+        let width_scale_factor = size.width as f32 / (size.width - padding_width) as f32;
+        let height_scale_factor = size.height as f32 / (size.height - padding_height) as f32;
+        let position: PhysicalPosition<f32> = PhysicalPosition::new(x as f32 * width_scale_factor, y as f32 * height_scale_factor);
 
         // If dragging, the relevant window (the one which we send all commands to) is the one
         // which the mouse drag started on. Otherwise its the top rendered window
@@ -314,6 +319,7 @@ impl MouseManager {
         keyboard_manager: &KeyboardManager,
         renderer: &Renderer,
         windowed_context: &WindowedContext<PossiblyCurrent>,
+        window_padding: WindowPadding,
         finger_id: (DeviceId, u64),
         location: PhysicalPosition<f32>,
         phase: &TouchPhase,
@@ -363,6 +369,7 @@ impl MouseManager {
                             keyboard_manager,
                             renderer,
                             windowed_context,
+                            window_padding,
                         );
                     }
                     // the double check might seem useless, but the if branch above might set
@@ -386,6 +393,7 @@ impl MouseManager {
                         keyboard_manager,
                         renderer,
                         windowed_context,
+                        window_padding,
                     );
                     self.handle_pointer_transition(&MouseButton::Left, true, keyboard_manager);
                 }
@@ -402,6 +410,7 @@ impl MouseManager {
                             keyboard_manager,
                             renderer,
                             windowed_context,
+                            window_padding
                         );
                         self.handle_pointer_transition(&MouseButton::Left, true, keyboard_manager);
                         self.handle_pointer_transition(&MouseButton::Left, false, keyboard_manager);
@@ -417,6 +426,7 @@ impl MouseManager {
         keyboard_manager: &KeyboardManager,
         renderer: &Renderer,
         windowed_context: &WindowedContext<PossiblyCurrent>,
+        window_padding: WindowPadding,
     ) {
         match event {
             Event::WindowEvent {
@@ -429,6 +439,7 @@ impl MouseManager {
                     keyboard_manager,
                     renderer,
                     windowed_context,
+                    window_padding,
                 );
                 if self.mouse_hidden {
                     windowed_context.window().set_cursor_visible(true);
@@ -469,6 +480,7 @@ impl MouseManager {
                 keyboard_manager,
                 renderer,
                 windowed_context,
+                window_padding,
                 (*device_id, *id),
                 location.cast(),
                 phase,

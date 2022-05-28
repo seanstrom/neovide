@@ -12,6 +12,10 @@ pub struct WindowSettings {
     pub hide_mouse_when_typing: bool,
     pub touch_deadzone: f32,
     pub touch_drag_timeout: f32,
+    pub top_padding: u32,
+    pub left_padding: u32,
+    pub right_padding: u32,
+    pub bottom_padding: u32,
 }
 
 impl Default for WindowSettings {
@@ -27,6 +31,10 @@ impl Default for WindowSettings {
             hide_mouse_when_typing: false,
             touch_deadzone: 6.0,
             touch_drag_timeout: 0.17,
+            top_padding: 0,
+            left_padding: 0,
+            right_padding: 0,
+            bottom_padding: 0,
         }
     }
 }

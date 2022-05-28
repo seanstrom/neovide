@@ -27,7 +27,7 @@ use crate::{
 use cursor_renderer::CursorRenderer;
 pub use fonts::caching_shaper::CachingShaper;
 pub use grid_renderer::GridRenderer;
-pub use rendered_window::{LineFragment, RenderedWindow, WindowDrawCommand, WindowDrawDetails};
+pub use rendered_window::{LineFragment, RenderedWindow, WindowDrawCommand, WindowDrawDetails, WindowPadding};
 
 #[derive(SettingGroup, Clone)]
 pub struct RendererSettings {
@@ -79,10 +79,12 @@ pub struct Renderer {
 
     pub batched_draw_command_receiver: UnboundedReceiver<Vec<DrawCommand>>,
     profiler: profiler::Profiler,
+
+    window_padding: WindowPadding,
 }
 
 impl Renderer {
-    pub fn new(scale_factor: f64) -> Self {
+    pub fn new(scale_factor: f64, window_padding: WindowPadding) -> Self {
         let cursor_renderer = CursorRenderer::new();
         let grid_renderer = GridRenderer::new(scale_factor);
         let current_mode = EditorMode::Unknown(String::from(""));
@@ -101,6 +103,7 @@ impl Renderer {
             window_regions,
             batched_draw_command_receiver,
             profiler,
+            window_padding,
         }
     }
 
@@ -185,7 +188,7 @@ impl Renderer {
             .update_cursor_destination(font_dimensions.into(), windows);
 
         self.cursor_renderer
-            .draw(&mut self.grid_renderer, &self.current_mode, root_canvas, dt);
+            .draw(&mut self.grid_renderer, &self.current_mode, root_canvas, dt, windows);
 
         self.profiler.draw(root_canvas, dt);
 
@@ -222,6 +225,7 @@ impl Renderer {
                                 grid_id,
                                 (grid_left as f32, grid_top as f32).into(),
                                 (width, height).into(),
+                                self.window_padding,
                             );
                             vacant_entry.insert(new_window);
                         } else {

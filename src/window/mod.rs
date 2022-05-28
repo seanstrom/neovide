@@ -35,7 +35,7 @@ use crate::{
     event_aggregator::EVENT_AGGREGATOR,
     frame::Frame,
     redraw_scheduler::REDRAW_SCHEDULER,
-    renderer::Renderer,
+    renderer::{Renderer, WindowPadding},
     running_tracker::*,
     settings::{
         load_last_window_settings, save_window_geometry, PersistentWindowSettings, SETTINGS,
@@ -66,6 +66,7 @@ pub struct GlutinWindowWrapper {
     saved_inner_size: PhysicalSize<u32>,
     saved_grid_size: Option<Dimensions>,
     window_command_receiver: UnboundedReceiver<WindowCommand>,
+    window_padding: WindowPadding,
 }
 
 impl GlutinWindowWrapper {
@@ -138,6 +139,7 @@ impl GlutinWindowWrapper {
             &self.keyboard_manager,
             &self.renderer,
             &self.windowed_context,
+            self.window_padding,
         );
         self.renderer.handle_event(&event);
         match event {
@@ -372,8 +374,16 @@ pub fn create_window() {
         }
     }
 
+    let settings = SETTINGS.get::<WindowSettings>();
+    let window_padding = WindowPadding {
+        top: settings.top_padding,
+        left: settings.left_padding,
+        right: settings.right_padding,
+        bottom: settings.bottom_padding,
+    };
+
     let scale_factor = windowed_context.window().scale_factor();
-    let renderer = Renderer::new(scale_factor);
+    let renderer = Renderer::new(scale_factor, window_padding);
     let saved_inner_size = window.inner_size();
 
     let skia_renderer = SkiaRenderer::new(&windowed_context);
@@ -397,6 +407,7 @@ pub fn create_window() {
         saved_inner_size,
         saved_grid_size: None,
         window_command_receiver,
+        window_padding,
     };
 
     let mut previous_frame_start = Instant::now();
